@@ -27,7 +27,7 @@ def run():
     st.line_chart(lte_data)
 
     N0 = st.number_input('N0', 1, 1000, 5)
-    N = st.number_input('N', int(N0), 1000, params.number_of_steps + 5)
+    N = st.number_input('N', int(N0), 1000, params.number_of_points + 5)
     
     with st.spinner("Computing errors..."):
         try:
@@ -53,6 +53,12 @@ def _compute_solutions_and_lte(params: SolverParams):
     rk_solution, rk_lte = \
         solve_and_compute_lte(RungeKuttaSolver, config.equation, exact_solution, params)  
 
+    # print('euler count', len(euler_solution))
+    # print('space', solve_space)
+    # print('euler at 3', euler_solution[7])
+    # print('exact at 3', exact_solution[7])
+    # print(exact_solution.dtype)
+    # print(euler_solution.dtype)
     # Solutions and errors plot Dataframe
     solution_data = pd.DataFrame(
         {
@@ -104,5 +110,5 @@ def _get_solver_params() -> SolverParams:
     initial_value = st.number_input('Initial value', 0, 10, 2)
     x_from = st.number_input('X From', 0, 10, 1)
     x_to = st.number_input('X To', x_from, 100, 5)
-    number_of_steps = st.number_input('Steps', 0, 1000, 50)
-    return SolverParams(initial_value, x_from, x_to, number_of_steps)
+    number_of_points = st.number_input('N', 0, 1000, 50)
+    return SolverParams(initial_value, x_from, x_to, number_of_points)

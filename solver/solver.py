@@ -15,23 +15,23 @@ class SolverParams:
         initial_value (float): value of y(x_from)
         x_from (float): integration range start
         x_to (float): integration range end
-        number_of_steps (int): number of points to integrate at
+        number_of_points (int): number of points to integrate at
 
     """
     initial_value: float
     x_from: float
     x_to: float
-    number_of_steps: int
+    number_of_points: int
 
     def get_step_size(self) -> float:
         """Computes step size for integration"""
-        return (self.x_to - self.x_from) / self.number_of_steps
+        return (self.x_to - self.x_from) / (self.number_of_points - 1)
 
-    def get_space(self, skip_first=False) -> np.ndarray:
+    def get_space(self, skip_last=False) -> np.ndarray:    
         """Get an array of all points inside the params range"""
-        if skip_first:
-            return np.linspace(self.x_from, self.x_to, self.number_of_steps)[1:]
-        return np.linspace(self.x_from, self.x_to, self.number_of_steps)
+        if skip_last:
+            return np.linspace(self.x_from, self.x_to, self.number_of_points)[:-1]
+        return np.linspace(self.x_from, self.x_to, self.number_of_points)
 
 
 class Solver(object):
@@ -68,7 +68,7 @@ class EulerSolver(Solver):
 
         y = params.initial_value
         values = [y]
-        for x in params.get_space(skip_first=True):
+        for x in params.get_space(skip_last=True):
             y += step_size * equation(x, y)
             values.append(y)
         return np.array(values)
@@ -93,11 +93,12 @@ class ImprovedEulerSolver(Solver):
 
         y = params.initial_value
         values = [y]
-        for x in params.get_space(skip_first=True):
-            slope1 = equation(x, y)
-            slope2 = equation(x + step_size, y + step_size * slope1)
+        for x in params.get_space(skip_last=True):
+            k1 = equation(x, y)
+            k2 = equation(x + step_size, y + step_size * k1)
 
-            y += 0.5 * step_size * (slope1 + slope2)
+            y += 0.5 * step_size * (k1 + k2)
+            #y += step_size * equation(x + step_size * 0.5, y + 0.5 * step_size * equation(x, y))
             values.append(y)
         return np.array(values)
 
@@ -120,13 +121,13 @@ class RungeKuttaSolver(Solver):
 
         y = params.initial_value
         values = [y]
-        for x in params.get_space(skip_first=True):
-            slope1 = equation(x, y)
-            slope2 = equation(x + 0.5 * step_size, y + 0.5 * step_size * slope1)
-            slope3 = equation(x + 0.5 * step_size, y + 0.5 * step_size * slope2)
-            slope4 = equation(x + step_size, y + step_size * slope3)
+        for x in params.get_space(skip_last=True):
+            k1 = equation(x, y)
+            k2 = equation(x + 0.5 * step_size, y + 0.5 * step_size * k1)
+            k3 = equation(x + 0.5 * step_size, y + 0.5 * step_size * k2)
+            k4 = equation(x + step_size, y + step_size * k3)
 
-            y += step_size / 6 * (slope1 + 2 * slope2 + 2 * slope3 + slope4)
+            y += step_size / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
             values.append(y)
         return np.array(values)
 

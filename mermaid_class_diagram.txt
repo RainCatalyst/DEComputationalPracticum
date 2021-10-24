@@ -52,7 +52,7 @@ classDiagram
         initial_value: float
         x_from: float
         x_to: float
-        number_of_steps: float
+        number_of_points: float
         get_step_size() float
         get_space(skil_first: bool = false) ndarray
     }
