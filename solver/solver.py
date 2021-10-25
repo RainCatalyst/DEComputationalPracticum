@@ -98,7 +98,6 @@ class ImprovedEulerSolver(Solver):
             k2 = equation(x + step_size, y + step_size * k1)
 
             y += 0.5 * step_size * (k1 + k2)
-            #y += step_size * equation(x + step_size * 0.5, y + 0.5 * step_size * equation(x, y))
             values.append(y)
         return np.array(values)
 

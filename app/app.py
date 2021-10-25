@@ -1,4 +1,5 @@
 import streamlit as st
+import altair as alt
 import pandas as pd
 import numpy as np
 import config
@@ -6,109 +7,109 @@ from solver.solver import *
 
 
 def run():
+    methods = {
+        'euler': EulerSolver,
+        'improved_euler': ImprovedEulerSolver,
+        'runge_kutta': RungeKuttaSolver
+    }
+
+    st.set_page_config(layout="wide")
     st.title('Differential Equation Solver')
     st.latex(config.equation_latex)
 
+    _, params_col, solutions_col, _ = st.columns([1, 1, 4, 1])
+    _, _, lte_col, _ = st.columns([1, 1, 4, 1])
+    _, gte_params_col, gte_col, _ = st.columns([1, 1, 4, 1])
+
     # Get integration parameters
-    params = _get_solver_params()
+    with params_col:
+        params = _get_solver_params()
 
     # Solve using given methods and compute errors
-    with st.spinner("Computing solutions..."):
-        try:
-            solution_data, lte_data = _compute_solutions_and_lte(params)
-        except SolverError as e:
-            st.error(e)
-            return
+    try:
+        solution_data, lte_data = _compute_solutions_and_lte(methods, params)    
+    except SolverError as e:
+        solutions_col.error(e)
+        return
 
-    st.subheader("Solutions")
-    st.line_chart(solution_data)
+    solutions_col.subheader("Solutions")
+    solutions_col.altair_chart(_df_to_chart(solution_data), use_container_width=True)
 
-    st.subheader("Local Truncation Errors (LTE)")
-    st.line_chart(lte_data)
+    lte_col.subheader("Local Truncation Errors (LTE)")
+    lte_col.altair_chart(_df_to_chart(lte_data, y_label='lte'), use_container_width=True)
 
-    N0 = st.number_input('N0', 1, 1000, 5)
-    N = st.number_input('N', int(N0), 1000, params.number_of_points + 5)
+    N0 = gte_params_col.number_input('N0', 1, 1000, 10)
+    N = gte_params_col.number_input('N', int(N0), 1000, 100)
     
-    with st.spinner("Computing errors..."):
-        try:
-            gte_data = _compute_gte(params, N0, N)
-        except SolverError as e:
-            st.error(e)
-            return
+    try:
+        gte_data = _compute_gte(methods, params, N0, N)
+    except SolverError as e:
+        gte_col.error(e)
+        return
 
-    st.subheader("Global Truncation Errors (GTE)")
-    st.line_chart(gte_data)
+    gte_col.subheader("Global Truncation Errors (GTE)")
+    gte_col.altair_chart(_df_to_chart(gte_data, x_label='n_points', y_label='gte'), use_container_width=True)
 
 
 @st.cache(suppress_st_warning=True)
-def _compute_solutions_and_lte(params: SolverParams):
+def _compute_solutions_and_lte(methods, params: SolverParams):
     solve_space = params.get_space()
     # Solve using different methods
-    exact_solution = \
-        ExactSolver.solve(config.solution, config.coefficient, params)
-    euler_solution, euler_lte = \
-        solve_and_compute_lte(EulerSolver, config.equation, exact_solution, params)
-    improved_euler_solution, improved_euler_lte = \
-        solve_and_compute_lte(ImprovedEulerSolver, config.equation, exact_solution, params)
-    rk_solution, rk_lte = \
-        solve_and_compute_lte(RungeKuttaSolver, config.equation, exact_solution, params)  
+    exact_solution = ExactSolver.solve(config.solution, config.coefficient, params)
 
-    # print('euler count', len(euler_solution))
-    # print('space', solve_space)
-    # print('euler at 3', euler_solution[7])
-    # print('exact at 3', exact_solution[7])
-    # print(exact_solution.dtype)
-    # print(euler_solution.dtype)
-    # Solutions and errors plot Dataframe
-    solution_data = pd.DataFrame(
-        {
-            'exact': exact_solution,
-            'euler': euler_solution,
-            'improved_euler': improved_euler_solution,
-            'runge_kutta_solution': rk_solution
-        }, index=solve_space)
-    error_data = pd.DataFrame(
-        {
-            'euler_error': euler_lte,
-            'improved_euler_error': improved_euler_lte,
-            'runge_kutta_error': rk_lte
-        }, index=solve_space)
+    solutions = {}
+    errors = {}
+    for name, solver in methods.items():
+        solutions[name], errors[name] = solve_and_compute_lte(solver, config.equation, exact_solution, params)
+
+    solutions['_exact'] = exact_solution
+    solution_data = pd.DataFrame(solutions, index=solve_space)
+
+    error_data = pd.DataFrame(errors, index=solve_space)
     
     return solution_data, error_data
 
 
 @st.cache(suppress_st_warning=True)
-def _compute_gte(params: SolverParams, N0: int, N: int):    
-    euler_gte, improved_euler_gte, rk_gte = [], [], []
+def _compute_gte(methods, params: SolverParams, N0: int, N: int):    
+    errors = {name: [] for name in methods}
 
     for n in range(N0, N):
         n_params = SolverParams(params.initial_value, params.x_from, params.x_to, n)
 
         exact_solution = ExactSolver.solve(config.solution, config.coefficient, n_params)
-        euler_gte.append(
-            np.max(solve_and_compute_lte(EulerSolver, config.equation, exact_solution, n_params)[1])
-        )
-        improved_euler_gte.append(
-            np.max(solve_and_compute_lte(ImprovedEulerSolver, config.equation, exact_solution, n_params)[1])
-        )
-        rk_gte.append(
-            np.max(solve_and_compute_lte(ImprovedEulerSolver, config.equation, exact_solution, n_params)[1])
-        )
+        for name, solver in methods.items():
+            errors[name].append(np.max(solve_and_compute_lte(solver, config.equation, exact_solution, n_params)[1]))
     
     # GTE Plot Dataframe
-    gte_data = pd.DataFrame(
-        {
-            'euler_gte': euler_gte,
-            'improved_euler_gte': improved_euler_gte,
-            'runge_kutta_gte': rk_gte
-        }, index=range(N0, N))
+    gte_data = pd.DataFrame(errors, index=range(N0, N))
 
     return gte_data
 
 
+def _df_to_chart(df, x_label='x', y_label='y', font_size=18) -> alt.Chart:
+    df = df.reset_index().melt('index').rename(columns={'index': 'x', 'value': 'y', 'variable': 'method'})
+    chart = alt.Chart(df).mark_line(size=3).encode(
+        x=alt.X('x', title=x_label),
+        y=alt.Y('y', title=y_label),
+        color='method',
+        strokeDash='method',
+    ).configure_axis(
+        labelFontSize=font_size,
+        titleFontSize=font_size
+    ).configure_header(
+        titleFontSize=font_size, labelFontSize=font_size
+    ).configure_legend(
+        titleFontSize=font_size, labelFontSize=font_size
+    ).properties(
+        width=600, height=400
+    )
+    return chart
+
+
 def _get_solver_params() -> SolverParams:
-    initial_value = st.number_input('Initial value', 0, 10, 2)
-    x_from = st.number_input('X From', 0, 10, 1)
-    x_to = st.number_input('X To', x_from, 100, 5)
+    initial_value = st.number_input('y0', value=2.0, step=1.0)
+    x_from = st.number_input('x0', min_value=0.0, value=1.0, step=1.0)
+    x_to = st.number_input('X', min_value=x_from, value=5.0, step=1.0)
     number_of_points = st.number_input('N', 0, 1000, 50)
     return SolverParams(initial_value, x_from, x_to, number_of_points)
