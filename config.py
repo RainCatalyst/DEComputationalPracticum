@@ -6,10 +6,7 @@ methods = {
     'runge_kutta': RungeKuttaSolver
 }
 
-default_initial_value = 2.0
-default_x0 = 1.0
-default_X = 5.0
-default_N = 15
+default_params = SolverParams(2.0, 1.0, 5.0, 15)
 
 equation_latex = '\\huge f(x, y) = -\\frac{-y^2}{3} - \\frac{2}{3x^2}'
 solution_latex = 'y(x) = e^{-2x}(\\frac{x^4}{4} + 1)'
